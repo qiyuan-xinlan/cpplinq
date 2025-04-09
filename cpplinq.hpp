@@ -800,12 +800,25 @@ private:
 #endif
 };
 
-template <typename TRange, typename TPredicate>
+struct default_comparer
+{
+    bool sort_ascending;
+    default_comparer(bool sort_ascending) : sort_ascending(sort_ascending) {}
+
+    template <typename T>
+    bool operator()(const T &a, const T &b) const
+    {
+        return sort_ascending ? a < b : a > b;
+    }
+};
+
+template <typename TRange, typename TPredicate, typename TComparer>
 struct orderby_range : sorting_range
 {
-    typedef orderby_range<TRange, TPredicate> this_type;
+    typedef orderby_range<TRange, TPredicate, TComparer> this_type;
     typedef TRange range_type;
     typedef TPredicate predicate_type;
+    typedef TComparer comparer_type;
 
     typedef typename TRange::value_type value_type;
     typedef typename TRange::return_type forwarding_return_type;
@@ -818,29 +831,29 @@ struct orderby_range : sorting_range
 
     range_type range;
     predicate_type predicate;
-    bool sort_ascending;
+    comparer_type comparer;
 
     size_type current;
     std::vector<value_type> sorted_values;
 
-    CPPLINQ_INLINEMETHOD orderby_range(range_type range, predicate_type predicate, bool sort_ascending) CPPLINQ_NOEXCEPT
+    CPPLINQ_INLINEMETHOD orderby_range(range_type range, predicate_type predicate, comparer_type comparer) CPPLINQ_NOEXCEPT
         : range(std::move(range)),
           predicate(std::move(predicate)),
-          sort_ascending(sort_ascending),
+          comparer(std::move(comparer)),
           current(invalid_size)
     {
         static_assert(!std::is_convertible<range_type, sorting_range>::value, "orderby may not follow orderby or thenby");
     }
 
     CPPLINQ_INLINEMETHOD orderby_range(orderby_range const &v)
-        : range(v.range), predicate(v.predicate), sort_ascending(v.sort_ascending), current(v.current), sorted_values(v.sorted_values)
+        : range(v.range), predicate(v.predicate), comparer(v.comparer), current(v.current), sorted_values(v.sorted_values)
     {
     }
 
     CPPLINQ_INLINEMETHOD orderby_range(orderby_range &&v) CPPLINQ_NOEXCEPT
         : range(std::move(v.range)),
           predicate(std::move(v.predicate)),
-          sort_ascending(std::move(v.sort_ascending)),
+          comparer(std::move(v.comparer)),
           current(std::move(v.current)),
           sorted_values(std::move(v.sorted_values))
     {
@@ -858,11 +871,7 @@ struct orderby_range : sorting_range
 
     CPPLINQ_INLINEMETHOD bool compare_values(value_type const &l, value_type const &r) const
     {
-        if (sort_ascending) {
-            return predicate(l) < predicate(r);
-        } else {
-            return predicate(r) < predicate(l);
-        }
+        return comparer(predicate(l), predicate(r));
     }
 
     template <typename TRangeBuilder>
@@ -905,47 +914,49 @@ struct orderby_range : sorting_range
     }
 };
 
-template <typename TPredicate>
+template <typename TPredicate, typename TComparer>
 struct orderby_builder : base_builder
 {
-    typedef orderby_builder<TPredicate> this_type;
+    typedef orderby_builder<TPredicate, TComparer> this_type;
     typedef TPredicate predicate_type;
+    typedef TComparer comparer_type;
 
     predicate_type predicate;
-    bool sort_ascending;
+    comparer_type comparer;
 
-    CPPLINQ_INLINEMETHOD explicit orderby_builder(predicate_type predicate, bool sort_ascending) CPPLINQ_NOEXCEPT
+    CPPLINQ_INLINEMETHOD explicit orderby_builder(predicate_type predicate, comparer_type comparer) CPPLINQ_NOEXCEPT
         : predicate(std::move(predicate)),
-          sort_ascending(sort_ascending)
+          comparer(std::move(comparer))
     {
     }
 
     CPPLINQ_INLINEMETHOD orderby_builder(orderby_builder const &v)
-        : predicate(v.predicate), sort_ascending(v.sort_ascending)
+        : predicate(v.predicate), comparer(v.comparer)
     {
     }
 
     CPPLINQ_INLINEMETHOD orderby_builder(orderby_builder &&v) CPPLINQ_NOEXCEPT
         : predicate(std::move(v.predicate)),
-          sort_ascending(std::move(v.sort_ascending))
+          comparer(std::move(v.comparer))
     {
     }
 
     template <typename TRange>
-    CPPLINQ_INLINEMETHOD orderby_range<TRange, TPredicate> build(TRange range) const
+    CPPLINQ_INLINEMETHOD orderby_range<TRange, TPredicate, TComparer> build(TRange range) const
     {
-        return orderby_range<TRange, TPredicate>(std::move(range), predicate, sort_ascending);
+        return orderby_range<TRange, TPredicate, TComparer>(std::move(range), predicate, comparer);
     }
 };
 
 // -------------------------------------------------------------------------
 
-template <typename TRange, typename TPredicate>
+template <typename TRange, typename TPredicate, typename TComparer>
 struct thenby_range : sorting_range
 {
-    typedef thenby_range<TRange, TPredicate> this_type;
+    typedef thenby_range<TRange, TPredicate, TComparer> this_type;
     typedef TRange range_type;
     typedef TPredicate predicate_type;
+    typedef TComparer comparer_type;
 
     typedef typename TRange::value_type value_type;
     typedef typename TRange::forwarding_return_type forwarding_return_type;
@@ -958,29 +969,29 @@ struct thenby_range : sorting_range
 
     range_type range;
     predicate_type predicate;
-    bool sort_ascending;
+    comparer_type comparer;
 
     size_type current;
     std::vector<value_type> sorted_values;
 
-    CPPLINQ_INLINEMETHOD thenby_range(range_type range, predicate_type predicate, bool sort_ascending) CPPLINQ_NOEXCEPT
+    CPPLINQ_INLINEMETHOD thenby_range(range_type range, predicate_type predicate, comparer_type comparer) CPPLINQ_NOEXCEPT
         : range(std::move(range)),
           predicate(std::move(predicate)),
-          sort_ascending(sort_ascending),
+          comparer(std::move(comparer)),
           current(invalid_size)
     {
         static_assert(std::is_convertible<range_type, sorting_range>::value, "thenby may only follow orderby or thenby");
     }
 
     CPPLINQ_INLINEMETHOD thenby_range(thenby_range const &v)
-        : range(v.range), predicate(v.predicate), sort_ascending(v.sort_ascending), current(v.current), sorted_values(v.sorted_values)
+        : range(v.range), predicate(v.predicate), comparer(v.comparer), current(v.current), sorted_values(v.sorted_values)
     {
     }
 
     CPPLINQ_INLINEMETHOD thenby_range(thenby_range &&v) CPPLINQ_NOEXCEPT
         : range(std::move(v.range)),
           predicate(std::move(v.predicate)),
-          sort_ascending(std::move(v.sort_ascending)),
+          comparer(std::move(v.comparer)),
           current(std::move(v.current)),
           sorted_values(std::move(v.sorted_values))
     {
@@ -1014,11 +1025,7 @@ struct thenby_range : sorting_range
             return false;
         }
 
-        if (sort_ascending) {
-            return predicate(l) < predicate(r);
-        } else {
-            return predicate(r) < predicate(l);
-        }
+        return comparer(predicate(l), predicate(r));
     }
 
     CPPLINQ_INLINEMETHOD return_type front() const
@@ -1055,36 +1062,37 @@ struct thenby_range : sorting_range
     }
 };
 
-template <typename TPredicate>
+template <typename TPredicate, typename TComparer>
 struct thenby_builder : base_builder
 {
-    typedef thenby_builder<TPredicate> this_type;
+    typedef thenby_builder<TPredicate, TComparer> this_type;
     typedef TPredicate predicate_type;
+    typedef TComparer comparer_type;
 
     predicate_type predicate;
-    bool sort_ascending;
+    comparer_type comparer;
 
-    CPPLINQ_INLINEMETHOD explicit thenby_builder(predicate_type predicate, bool sort_ascending) CPPLINQ_NOEXCEPT
+    CPPLINQ_INLINEMETHOD explicit thenby_builder(predicate_type predicate, comparer_type comparer) CPPLINQ_NOEXCEPT
         : predicate(std::move(predicate)),
-          sort_ascending(sort_ascending)
+          comparer(std::move(comparer))
     {
     }
 
     CPPLINQ_INLINEMETHOD thenby_builder(thenby_builder const &v)
-        : predicate(v.predicate), sort_ascending(v.sort_ascending)
+        : predicate(v.predicate), comparer(v.comparer)
     {
     }
 
     CPPLINQ_INLINEMETHOD thenby_builder(thenby_builder &&v) CPPLINQ_NOEXCEPT
         : predicate(std::move(v.predicate)),
-          sort_ascending(std::move(v.sort_ascending))
+          comparer(std::move(v.comparer))
     {
     }
 
     template <typename TRange>
-    CPPLINQ_INLINEMETHOD thenby_range<TRange, TPredicate> build(TRange range) const
+    CPPLINQ_INLINEMETHOD thenby_range<TRange, TPredicate, TComparer> build(TRange range) const
     {
-        return thenby_range<TRange, TPredicate>(std::move(range), predicate, sort_ascending);
+        return thenby_range<TRange, TPredicate, TComparer>(std::move(range), predicate, comparer);
     }
 };
 
@@ -4682,40 +4690,52 @@ CPPLINQ_INLINEMETHOD detail::skip_builder skip(size_type count) CPPLINQ_NOEXCEPT
 }
 
 // Ordering operators
-template <typename TPredicate>
-CPPLINQ_INLINEMETHOD detail::orderby_builder<TPredicate> orderby(TPredicate predicate, bool sort_ascending = true) CPPLINQ_NOEXCEPT
+template <typename TPredicate, typename TComparer>
+CPPLINQ_INLINEMETHOD detail::orderby_builder<TPredicate, TComparer> orderby(TPredicate predicate, TComparer comparer) CPPLINQ_NOEXCEPT
 {
-    return detail::orderby_builder<TPredicate>(std::move(predicate), sort_ascending);
+    return detail::orderby_builder<TPredicate, TComparer>(std::move(predicate), std::move(comparer));
 }
 
 template <typename TPredicate>
-CPPLINQ_INLINEMETHOD detail::orderby_builder<TPredicate> orderby_ascending(TPredicate predicate) CPPLINQ_NOEXCEPT
+CPPLINQ_INLINEMETHOD auto orderby(TPredicate predicate, bool sort_ascending = true) CPPLINQ_NOEXCEPT
 {
-    return detail::orderby_builder<TPredicate>(std::move(predicate), true);
+    return orderby(std::move(predicate), detail::default_comparer(sort_ascending));
 }
 
 template <typename TPredicate>
-CPPLINQ_INLINEMETHOD detail::orderby_builder<TPredicate> orderby_descending(TPredicate predicate) CPPLINQ_NOEXCEPT
+CPPLINQ_INLINEMETHOD auto orderby_ascending(TPredicate predicate) CPPLINQ_NOEXCEPT
 {
-    return detail::orderby_builder<TPredicate>(std::move(predicate), false);
+    return orderby(std::move(predicate), true);
 }
 
 template <typename TPredicate>
-CPPLINQ_INLINEMETHOD detail::thenby_builder<TPredicate> thenby(TPredicate predicate, bool sort_ascending = true) CPPLINQ_NOEXCEPT
+CPPLINQ_INLINEMETHOD auto orderby_descending(TPredicate predicate) CPPLINQ_NOEXCEPT
 {
-    return detail::thenby_builder<TPredicate>(std::move(predicate), sort_ascending);
+    return orderby(std::move(predicate), false);
+}
+
+template <typename TPredicate, typename TComparer>
+CPPLINQ_INLINEMETHOD detail::thenby_builder<TPredicate, TComparer> thenby(TPredicate predicate, TComparer comparer) CPPLINQ_NOEXCEPT
+{
+    return detail::thenby_builder<TPredicate, TComparer>(std::move(predicate), std::move(comparer));
 }
 
 template <typename TPredicate>
-CPPLINQ_INLINEMETHOD detail::thenby_builder<TPredicate> thenby_ascending(TPredicate predicate) CPPLINQ_NOEXCEPT
+CPPLINQ_INLINEMETHOD auto thenby(TPredicate predicate, bool sort_ascending = true) CPPLINQ_NOEXCEPT
 {
-    return detail::thenby_builder<TPredicate>(std::move(predicate), true);
+    return thenby(std::move(predicate), detail::default_comparer(sort_ascending));
 }
 
 template <typename TPredicate>
-CPPLINQ_INLINEMETHOD detail::thenby_builder<TPredicate> thenby_descending(TPredicate predicate) CPPLINQ_NOEXCEPT
+CPPLINQ_INLINEMETHOD auto thenby_ascending(TPredicate predicate) CPPLINQ_NOEXCEPT
 {
-    return detail::thenby_builder<TPredicate>(std::move(predicate), false);
+    return thenby(std::move(predicate), true);
+}
+
+template <typename TPredicate>
+CPPLINQ_INLINEMETHOD auto thenby_descending(TPredicate predicate) CPPLINQ_NOEXCEPT
+{
+    return thenby(std::move(predicate), false);
 }
 
 CPPLINQ_INLINEMETHOD detail::reverse_builder reverse(size_type capacity = 16U) CPPLINQ_NOEXCEPT
